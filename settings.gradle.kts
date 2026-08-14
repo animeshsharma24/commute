@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Commute Tracker"
+rootProject.name = "Commute"
 include(":app")

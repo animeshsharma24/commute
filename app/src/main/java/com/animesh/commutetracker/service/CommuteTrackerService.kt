@@ -127,7 +127,7 @@ class CommuteTrackerService : Service() {
     }
 
     private fun startServiceInForeground() {
-        val notification = createMonitoringNotification("Commute Tracker is monitoring")
+        val notification = createMonitoringNotification("Commute is monitoring")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(MONITORING_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         } else {
@@ -281,7 +281,7 @@ class CommuteTrackerService : Service() {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL_ID_LOW)
-            .setContentTitle("Commute Tracker")
+            .setContentTitle("Commute")
             .setContentText(content)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)

@@ -25,7 +25,7 @@ fun SetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Welcome to Commute Tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Welcome to Commute", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(32.dp))
             
             Text("Select Tracking Mode", style = MaterialTheme.typography.titleMedium)

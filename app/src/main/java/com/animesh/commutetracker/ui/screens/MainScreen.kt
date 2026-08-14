@@ -45,7 +45,7 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Commute Tracker") },
+                title = { Text("Commute") },
                 actions = {
                     IconButton(onClick = onNavigateToStats) { Icon(Icons.Default.ShowChart, "Stats") }
                     IconButton(onClick = onNavigateToHistory) { Icon(Icons.Default.History, "History") }
