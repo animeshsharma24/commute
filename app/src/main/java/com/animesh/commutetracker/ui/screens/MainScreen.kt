@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.animesh.commutetracker.data.model.*
 import com.animesh.commutetracker.data.repository.TrackingMode
+import com.animesh.commutetracker.ui.components.CommuteItem
 import com.animesh.commutetracker.ui.components.TransportDialog
 import com.animesh.commutetracker.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -27,7 +28,8 @@ fun MainScreen(
     viewModel: MainViewModel,
     onNavigateToHistory: () -> Unit,
     onNavigateToStats: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToManualEntry: () -> Unit
 ) {
     val context = LocalContext.current
     val trackingEnabled by viewModel.trackingEnabled.collectAsState()
@@ -59,7 +61,15 @@ fun MainScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                StatusCard(trackingEnabled, trackingMode, currentState, homeSsids, officeSsids, viewModel::toggleTracking)
+                StatusCard(
+                    enabled = trackingEnabled,
+                    mode = trackingMode,
+                    state = currentState,
+                    homeSsids = homeSsids,
+                    officeSsids = officeSsids,
+                    onToggle = viewModel::toggleTracking,
+                    onEndCommute = { viewModel.endOngoingCommute() }
+                )
             }
 
             if (trackingMode == TrackingMode.MANUAL) {
@@ -73,8 +83,20 @@ fun MainScreen(
                     )
                 }
             }
+            
+            item {
+                Button(
+                    onClick = onNavigateToManualEntry,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add Missed Commute")
+                }
+            }
 
-            if (activeDialogRecord != null && activeDialogRecord?.status == CommuteStatus.PENDING_DETAILS) {
+            if (activeDialogRecord != null && activeDialogRecord?.record?.status == CommuteStatus.PENDING_DETAILS) {
                 item {
                     PendingDetailsBanner { /* Dialog handles auto-show */ }
                 }
@@ -92,7 +114,6 @@ fun MainScreen(
 
             items(todayRecords) { record ->
                 CommuteItem(record) {
-                    record.transportMode?.let { viewModel.loadRecentCosts(it) }
                     viewModel.showEditDialog(record)
                 }
             }
@@ -119,15 +140,16 @@ fun MainScreen(
         )
     }
 
-    activeDialogRecord?.let { record ->
+    activeDialogRecord?.let { commuteWithModes ->
         TransportDialog(
             recentCosts = recentCosts,
+            totalDuration = commuteWithModes.record.durationMinutes,
             onModeSelected = { viewModel.loadRecentCosts(it) },
-            onConfirm = { mode, cost ->
-                if (record.status == CommuteStatus.PENDING_DETAILS) {
-                    viewModel.finalizeCommute(record, mode, cost, context)
+            onConfirm = { modes ->
+                if (commuteWithModes.record.status == CommuteStatus.PENDING_DETAILS) {
+                    viewModel.finalizeCommute(commuteWithModes.record, modes, context)
                 } else {
-                    viewModel.updateCommute(record, mode, cost)
+                    viewModel.updateCommute(commuteWithModes.record, modes)
                 }
             },
             onDismiss = { viewModel.dismissDialog() }
@@ -142,7 +164,8 @@ fun StatusCard(
     state: String,
     homeSsids: Set<String>,
     officeSsids: Set<String>,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    onEndCommute: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -152,6 +175,18 @@ fun StatusCard(
                     Text("Status: $state", style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(checked = enabled, onCheckedChange = onToggle)
+            }
+            if (state.contains("PENDING")) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onEndCommute,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.Stop, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("END COMMUTE")
+                }
             }
             if (mode == TrackingMode.WIFI && enabled) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -210,29 +245,6 @@ fun PendingDetailsBanner(onClick: () -> Unit) {
             Icon(Icons.Default.Info, null)
             Spacer(modifier = Modifier.width(12.dp))
             Text("1 commute needs details. Tap to complete.", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CommuteItem(record: CommuteRecord, onClick: () -> Unit) {
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val directionText = if (record.direction == CommuteDirection.HOME_TO_OFFICE) "Home → Office" else "Office → Home"
-    val methodIcon = when(record.detectionMethod) {
-        DetectionMethod.WIFI -> Icons.Default.Wifi
-        DetectionMethod.LOCATION -> Icons.Default.Place
-        DetectionMethod.MANUAL -> Icons.Default.PanTool
-    }
-
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(directionText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("${timeFormat.format(Date(record.startTimestamp))} → ${timeFormat.format(Date(record.arrivalTimestamp))}", color = MaterialTheme.colorScheme.secondary)
-                Text("${record.durationMinutes} min · ${record.transportMode} · ₹${record.cost ?: "-"}")
-            }
-            Icon(methodIcon, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), modifier = Modifier.size(24.dp))
         }
     }
 }

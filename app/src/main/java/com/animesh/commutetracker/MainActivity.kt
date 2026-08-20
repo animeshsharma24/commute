@@ -17,6 +17,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
@@ -28,6 +29,8 @@ import com.animesh.commutetracker.ui.navigation.NavGraph
 import com.animesh.commutetracker.ui.theme.CommuteTrackerTheme
 import com.animesh.commutetracker.ui.viewmodel.MainViewModel
 import com.animesh.commutetracker.ui.viewmodel.MainViewModelFactory
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -41,6 +44,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -49,6 +53,10 @@ class MainActivity : ComponentActivity() {
         val preferenceManager = PreferenceManager(this)
         val factory = MainViewModelFactory(repository, preferenceManager, applicationContext)
         val viewModel = ViewModelProvider(this, factory)[MainViewModel::class.java]
+
+        splashScreen.setKeepOnScreenCondition {
+            viewModel.isFirstRun.value == null
+        }
 
         checkPermissions()
 

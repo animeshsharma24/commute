@@ -354,6 +354,25 @@ class CommuteTrackerService : Service() {
             if (it.hasExtra("UPDATE_GEOFENCES")) {
                 updateGeofences()
             }
+            if (it.hasExtra("STOP_ONGOING_COMMUTE")) {
+                serviceScope.launch {
+                    processingMutex.withLock {
+                        val state = preferenceManager.currentState.first()
+                        if (state == "HOME_TO_OFFICE_PENDING") {
+                            finalizeCommute(CommuteDirection.HOME_TO_OFFICE, DetectionMethod.MANUAL)
+                        } else if (state == "OFFICE_TO_HOME_PENDING") {
+                            finalizeCommute(CommuteDirection.OFFICE_TO_HOME, DetectionMethod.MANUAL)
+                        } else if (preferenceManager.activeManualStartTime.first() > 0) {
+                            // This handles the case where a manual commute is running but not yet finalized
+                            // But usually stopManualCommute is called from ViewModel. 
+                            // However, requirement says "clearly accessible action to manually end/stop an ongoing commute".
+                            // If it's a manual tracking commute, it might not be in a "PENDING" state in the service's sense if the service isn't tracking it.
+                            // But the service is monitoring.
+                            log("MANUAL_STOP_REQUESTED", "State=$state")
+                        }
+                    }
+                }
+            }
         }
         return START_STICKY
     }

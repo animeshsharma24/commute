@@ -15,6 +15,7 @@ sealed class Screen(val route: String) {
     object History : Screen("history")
     object Stats : Screen("stats")
     object Settings : Screen("settings")
+    object ManualEntry : Screen("manual_entry")
     object Debug : Screen("debug")
     object Logs : Screen("logs")
 }
@@ -25,7 +26,10 @@ fun NavGraph(
     viewModel: MainViewModel
 ) {
     val isFirstRun by viewModel.isFirstRun.collectAsState()
-    val startDestination = if (isFirstRun) Screen.Setup.route else Screen.Main.route
+    
+    if (isFirstRun == null) return
+
+    val startDestination = if (isFirstRun == true) Screen.Setup.route else Screen.Main.route
 
     NavHost(
         navController = navController,
@@ -43,8 +47,12 @@ fun NavGraph(
                 viewModel = viewModel,
                 onNavigateToHistory = { navController.navigate(Screen.History.route) },
                 onNavigateToStats = { navController.navigate(Screen.Stats.route) },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToManualEntry = { navController.navigate(Screen.ManualEntry.route) }
             )
+        }
+        composable(Screen.ManualEntry.route) {
+            ManualCommuteScreen(viewModel) { navController.popBackStack() }
         }
         composable(Screen.History.route) {
             HistoryScreen(viewModel) { navController.popBackStack() }

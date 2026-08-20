@@ -68,7 +68,7 @@ fun DebugScreen(
             item { DebugInfoRow("Current SSID", lastDetectedSsid) }
             item { DebugInfoRow("Home SSIDs", homeSsids.joinToString(", ")) }
             item { DebugInfoRow("Office SSIDs", officeSsids.joinToString(", ")) }
-            item { DebugInfoRow("Pending Record ID", activeDialogRecord?.id?.toString() ?: "None") }
+            item { DebugInfoRow("Pending Record ID", activeDialogRecord?.record?.id?.toString() ?: "None") }
             item { DebugInfoRow("Notifications Enabled", areNotificationsEnabled.toString()) }
             item { DebugInfoRow("High Channel Importance", channelImportance.toString() + " (4=High)") }
             item { DebugInfoRow("Last Callback", if(lastCallbackTime > 0) timeFormat.format(Date(lastCallbackTime)) else "Never") }

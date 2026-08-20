@@ -10,7 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.animesh.commutetracker.data.model.CommuteRecord
+import com.animesh.commutetracker.data.model.CommuteWithModes
+import com.animesh.commutetracker.data.model.TransportMode
 import com.animesh.commutetracker.ui.viewmodel.MainViewModel
 import java.util.*
 
@@ -34,8 +35,8 @@ fun StatsScreen(
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
             val totalCommutes = allRecords.size
-            val totalMinutes = allRecords.sumOf { it.durationMinutes }
-            val totalCost = allRecords.sumOf { it.cost ?: 0 }
+            val totalMinutes = allRecords.sumOf { it.record.durationMinutes }
+            val totalCost = allRecords.sumOf { commute -> commute.modes.sumOf { it.cost } }
             
             item { 
                 StatCard("Overview", listOf(
@@ -49,16 +50,22 @@ fun StatsScreen(
             
             item { Spacer(modifier = Modifier.height(16.dp)) }
             
-            val transportGroups = allRecords.groupBy { it.transportMode }
+            val allModes = allRecords.flatMap { it.modes }
+            val transportGroups = allModes.groupBy { it.transportMode }
+            
             item {
                 Text("Transport Breakdown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                transportGroups.forEach { (mode, records) ->
-                    val modeCount = records.size
-                    val modeCost = records.sumOf { it.cost ?: 0 }
+                transportGroups.forEach { (mode, modesList) ->
+                    val modeCount = modesList.size
+                    val modeCost = modesList.sumOf { it.cost }
                     ListItem(
-                        headlineContent = { Text(mode?.name ?: "Unknown") },
-                        supportingContent = { Text("$modeCount commutes · ₹$modeCost total") },
-                        trailingContent = { Text("${(modeCount.toFloat() / totalCommutes * 100).toInt()}%") }
+                        headlineContent = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                        supportingContent = { Text("$modeCount legs · ₹$modeCost total") },
+                        trailingContent = { 
+                            if (allModes.isNotEmpty()) {
+                                Text("${(modeCount.toFloat() / allModes.size * 100).toInt()}%")
+                            }
+                        }
                     )
                 }
             }

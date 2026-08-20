@@ -14,6 +14,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.animesh.commutetracker.data.model.CommuteRecord
+import com.animesh.commutetracker.data.model.CommuteStatus
+import com.animesh.commutetracker.data.model.CommuteWithModes
+import com.animesh.commutetracker.ui.components.CommuteItem
 import com.animesh.commutetracker.ui.components.TransportDialog
 import com.animesh.commutetracker.ui.viewmodel.MainViewModel
 
@@ -40,7 +43,7 @@ fun HistoryScreen(
             )
         }
     ) { padding ->
-        val groupedRecords = allRecords.groupBy { it.date }
+        val groupedRecords = allRecords.groupBy { it.record.date }
 
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
             groupedRecords.forEach { (date, records) ->
@@ -50,11 +53,10 @@ fun HistoryScreen(
                 items(records) { record ->
                     Box(modifier = Modifier.fillMaxWidth()) {
                         CommuteItem(record) {
-                            record.transportMode?.let { viewModel.loadRecentCosts(it) }
                             viewModel.showEditDialog(record)
                         }
                         IconButton(
-                            onClick = { recordToDelete = record },
+                            onClick = { recordToDelete = record.record },
                             modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
                         ) {
                             Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
@@ -82,12 +84,13 @@ fun HistoryScreen(
         )
     }
 
-    activeDialogRecord?.let { record ->
+    activeDialogRecord?.let { commuteWithModes ->
         TransportDialog(
             recentCosts = recentCosts,
+            totalDuration = commuteWithModes.record.durationMinutes,
             onModeSelected = { viewModel.loadRecentCosts(it) },
-            onConfirm = { mode, cost ->
-                viewModel.updateCommute(record, mode, cost)
+            onConfirm = { modes ->
+                viewModel.updateCommute(commuteWithModes.record, modes)
             },
             onDismiss = { viewModel.dismissDialog() }
         )
