@@ -5,6 +5,8 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -13,6 +15,7 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.animesh.commutetracker.MainActivity
@@ -51,6 +54,15 @@ class CommuteTrackerService : Service() {
     
     private var lastKnownSsid: String? = null
     private var isCallbackRegistered = false
+
+    private val stateChangeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == WifiManager.WIFI_STATE_CHANGED_ACTION ||
+                intent.action == android.location.LocationManager.PROVIDERS_CHANGED_ACTION) {
+                evaluateMechanismUsability()
+            }
+        }
+    }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -98,7 +110,78 @@ class CommuteTrackerService : Service() {
         
         registerNetworkCallback()
         reconcileWiFi()
+        
+        val filter = IntentFilter().apply {
+            addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(android.location.LocationManager.PROVIDERS_CHANGED_ACTION)
+        }
+        registerReceiver(stateChangeReceiver, filter)
+        evaluateMechanismUsability()
+        
         updateGeofences()
+    }
+
+    private fun isWifiUsable(): Boolean {
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val isWifiEnabled = wifiManager.isWifiEnabled
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        val isLocationEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            locationManager.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        }
+        val hasLocationPermission = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        return isWifiEnabled && isLocationEnabled && hasLocationPermission
+    }
+
+    private fun isGeoUsable(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        val isLocationEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            locationManager.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        }
+        val hasLocationPermission = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        return isLocationEnabled && hasLocationPermission
+    }
+
+    private fun evaluateMechanismUsability() {
+        val wifiUsable = isWifiUsable()
+        val geoUsable = isGeoUsable()
+
+        val newMode = if (wifiUsable) TrackingMode.WIFI else if (geoUsable) TrackingMode.LOCATION else TrackingMode.MANUAL
+        serviceScope.launch {
+            preferenceManager.setTrackingMode(newMode)
+        }
+        
+        if (!wifiUsable && !geoUsable) {
+            showEnableServicesNotification()
+        } else {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.cancel(103)
+        }
+        
+        updateGeofences()
+    }
+
+    private fun showEnableServicesNotification() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        val pendingIntent = PendingIntent.getActivity(this, 2, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID_LOW)
+            .setContentTitle("Tracking Mode: Manual")
+            .setContentText("Enable Wi-Fi or Location for automatic tracking")
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+            
+        manager.notify(103, notification)
     }
 
     private fun registerNetworkCallback() {
@@ -141,8 +224,7 @@ class CommuteTrackerService : Service() {
         
         serviceScope.launch {
             processingMutex.withLock {
-                val mode = preferenceManager.trackingMode.first()
-                if (mode != TrackingMode.WIFI) {
+                if (!isWifiUsable()) {
                     preferenceManager.updateDiagnosticInfo(newSsid ?: "None", null, if(oldSsid != newSsid) "$oldSsid -> $newSsid" else null)
                     return@withLock
                 }
@@ -190,7 +272,7 @@ class CommuteTrackerService : Service() {
         log("GEOFENCE_EVENT", "ID=$geofenceId, Transition=$transition")
         serviceScope.launch {
             processingMutex.withLock {
-                if (preferenceManager.trackingMode.first() != TrackingMode.LOCATION) return@withLock
+                if (!isGeoUsable()) return@withLock
                 
                 val isAtHome = geofenceId == GEOFENCE_HOME && transition == Geofence.GEOFENCE_TRANSITION_ENTER
                 val isAtOffice = geofenceId == GEOFENCE_OFFICE && transition == Geofence.GEOFENCE_TRANSITION_ENTER
@@ -199,10 +281,24 @@ class CommuteTrackerService : Service() {
 
                 val state = preferenceManager.currentState.first()
                 val currentTime = System.currentTimeMillis()
+                
+                val homeSsids = preferenceManager.homeSsids.first()
+                val officeSsids = preferenceManager.officeSsids.first()
+                val currentSsid = lastKnownSsid
+                val wifiConnectedToHome = currentSsid != null && homeSsids.contains(currentSsid)
+                val wifiConnectedToOffice = currentSsid != null && officeSsids.contains(currentSsid)
 
                 if (isLeavingHome && state == "IDLE") {
+                    if (isWifiUsable() && wifiConnectedToHome) {
+                        log("GEOFENCE_EVENT", "Ignored: Wi-Fi still connected to Home")
+                        return@withLock
+                    }
                     startPendingCommute(currentTime, "HOME_TO_OFFICE_PENDING", DetectionMethod.LOCATION)
                 } else if (isLeavingOffice && state == "IDLE") {
+                    if (isWifiUsable() && wifiConnectedToOffice) {
+                        log("GEOFENCE_EVENT", "Ignored: Wi-Fi still connected to Office")
+                        return@withLock
+                    }
                     startPendingCommute(currentTime, "OFFICE_TO_HOME_PENDING", DetectionMethod.LOCATION)
                 } else if (isAtOffice && state == "HOME_TO_OFFICE_PENDING") {
                     finalizeCommute(CommuteDirection.HOME_TO_OFFICE, DetectionMethod.LOCATION)
@@ -303,7 +399,7 @@ class CommuteTrackerService : Service() {
     @SuppressLint("MissingPermission")
     private fun updateGeofences() {
         serviceScope.launch {
-            if (preferenceManager.trackingMode.first() != TrackingMode.LOCATION) {
+            if (!isGeoUsable()) {
                 geofencingClient.removeGeofences(getGeofencePendingIntent())
                 return@launch
             }
@@ -383,6 +479,11 @@ class CommuteTrackerService : Service() {
         log("SERVICE_STOPPED")
         serviceScope.launch { preferenceManager.setServiceRunning(false) }
         connectivityManager.unregisterNetworkCallback(networkCallback)
+        try {
+            unregisterReceiver(stateChangeReceiver)
+        } catch (_: Exception) {
+            // Ignored
+        }
         serviceScope.cancel()
         super.onDestroy()
     }

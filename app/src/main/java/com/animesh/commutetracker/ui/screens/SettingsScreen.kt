@@ -62,11 +62,15 @@ fun SettingsScreen(
         LazyColumn(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
             item { SettingHeader("TRACKING") }
             item {
-                Text("Tracking Mode", style = MaterialTheme.typography.labelMedium)
+                Text("Tracking Mode (Auto-Selected at Runtime)", style = MaterialTheme.typography.labelMedium)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TrackingMode.entries.forEach { mode ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = trackingMode == mode, onClick = { viewModel.setTrackingMode(mode) })
+                            RadioButton(
+                                selected = trackingMode == mode, 
+                                onClick = null,
+                                enabled = trackingMode == mode
+                            )
                             Text(mode.name, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -74,59 +78,55 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
-            if (trackingMode == TrackingMode.WIFI) {
-                item { SettingHeader("WI-FI LOCATIONS") }
-                item { Text("Home SSIDs", style = MaterialTheme.typography.labelSmall) }
-                items(homeSsids.toList()) { ssid ->
-                    SsidItem(ssid) { viewModel.removeHomeSsid(ssid) }
+            item { SettingHeader("WI-FI LOCATIONS") }
+            item { Text("Home SSIDs", style = MaterialTheme.typography.labelSmall) }
+            items(homeSsids.toList()) { ssid ->
+                SsidItem(ssid) { viewModel.removeHomeSsid(ssid) }
+            }
+            item {
+                SsidInputRow(newHomeSsid, { newHomeSsid = it }, { viewModel.addHomeSsid(newHomeSsid); newHomeSsid = "" })
+            }
+            item {
+                TextButton(onClick = { viewModel.addHomeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
+                    Icon(Icons.Default.Add, null)
+                    Text("Add Current: $lastDetectedSsid")
                 }
-                item {
-                    SsidInputRow(newHomeSsid, { newHomeSsid = it }, { viewModel.addHomeSsid(newHomeSsid); newHomeSsid = "" })
-                }
-                item {
-                    TextButton(onClick = { viewModel.addHomeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
-                        Icon(Icons.Default.Add, null)
-                        Text("Add Current: $lastDetectedSsid")
-                    }
-                }
-                
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-                item { Text("Office SSIDs", style = MaterialTheme.typography.labelSmall) }
-                items(officeSsids.toList()) { ssid ->
-                    SsidItem(ssid) { viewModel.removeOfficeSsid(ssid) }
-                }
-                item {
-                    SsidInputRow(newOfficeSsid, { newOfficeSsid = it }, { viewModel.addOfficeSsid(newOfficeSsid); newOfficeSsid = "" })
-                }
-                item {
-                    TextButton(onClick = { viewModel.addOfficeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
-                        Icon(Icons.Default.Add, null)
-                        Text("Add Current: $lastDetectedSsid")
-                    }
+            }
+            
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+            item { Text("Office SSIDs", style = MaterialTheme.typography.labelSmall) }
+            items(officeSsids.toList()) { ssid ->
+                SsidItem(ssid) { viewModel.removeOfficeSsid(ssid) }
+            }
+            item {
+                SsidInputRow(newOfficeSsid, { newOfficeSsid = it }, { viewModel.addOfficeSsid(newOfficeSsid); newOfficeSsid = "" })
+            }
+            item {
+                TextButton(onClick = { viewModel.addOfficeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
+                    Icon(Icons.Default.Add, null)
+                    Text("Add Current: $lastDetectedSsid")
                 }
             }
 
-            if (trackingMode == TrackingMode.LOCATION) {
-                item { SettingHeader("GEOFENCE LOCATIONS") }
-                item {
-                    LocationPickerRow("Home", homeLocation) { 
-                        getCurrentLocation(context) { lat, lng -> viewModel.setHomeLocation(lat, lng) }
-                    }
+            item { SettingHeader("GEOFENCE LOCATIONS") }
+            item {
+                LocationPickerRow("Home", homeLocation) { 
+                    getCurrentLocation(context) { lat, lng -> viewModel.setHomeLocation(lat, lng) }
                 }
-                item {
-                    LocationPickerRow("Office", officeLocation) {
-                        getCurrentLocation(context) { lat, lng -> viewModel.setOfficeLocation(lat, lng) }
-                    }
+            }
+            item {
+                LocationPickerRow("Office", officeLocation) {
+                    getCurrentLocation(context) { lat, lng -> viewModel.setOfficeLocation(lat, lng) }
                 }
-                item {
-                    Text("Geofence Radius: ${geofenceRadius}m", style = MaterialTheme.typography.labelSmall)
-                    Slider(
-                        value = geofenceRadius.toFloat(),
-                        onValueChange = { viewModel.setGeofenceRadius(it.toInt()) },
-                        valueRange = 100f..500f,
-                        steps = 4
-                    )
-                }
+            }
+            item {
+                Text("Geofence Radius: ${geofenceRadius}m", style = MaterialTheme.typography.labelSmall)
+                Slider(
+                    value = geofenceRadius.toFloat(),
+                    onValueChange = { viewModel.setGeofenceRadius(it.toInt()) },
+                    valueRange = 100f..500f,
+                    steps = 4
+                )
             }
 
             item { SettingHeader("DATA") }
