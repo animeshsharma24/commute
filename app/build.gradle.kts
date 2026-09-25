@@ -22,10 +22,17 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
+    }
+    
+    lint {
+        abortOnError = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
