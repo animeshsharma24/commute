@@ -10,7 +10,7 @@ import com.animesh.commutetracker.data.model.CommuteMode
 import com.animesh.commutetracker.data.model.CommuteRecord
 import com.animesh.commutetracker.data.model.DiagnosticLog
 
-@Database(entities = [CommuteRecord::class, CommuteMode::class, DiagnosticLog::class], version = 5, exportSchema = false)
+@Database(entities = [CommuteRecord::class, CommuteMode::class, DiagnosticLog::class], version = 6, exportSchema = false)
 @androidx.room.TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun commuteDao(): CommuteDao
@@ -73,6 +73,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `commute_modes_new` (
+                        `modeId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                        `commuteId` INTEGER NOT NULL, 
+                        `transportMode` TEXT NOT NULL, 
+                        `durationMinutes` INTEGER, 
+                        `cost` INTEGER NOT NULL, 
+                        FOREIGN KEY(`commuteId`) REFERENCES `commute_records`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE 
+                    )
+                """.trimIndent())
+                db.execSQL("INSERT INTO commute_modes_new (modeId, commuteId, transportMode, durationMinutes, cost) SELECT modeId, commuteId, transportMode, durationMinutes, cost FROM commute_modes")
+                db.execSQL("DROP TABLE commute_modes")
+                db.execSQL("ALTER TABLE commute_modes_new RENAME TO commute_modes")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_commute_modes_commuteId` ON `commute_modes` (`commuteId`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -80,7 +99,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "commute_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance

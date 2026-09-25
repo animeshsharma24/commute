@@ -78,6 +78,7 @@ class MainViewModel(
     val scanError: StateFlow<String?> = _scanError
 
     private var finalizingRecordId: Long = -1L
+    private val dismissedPendingRecordIds = mutableSetOf<Long>()
     
     private val wifiScanReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -114,7 +115,9 @@ class MainViewModel(
         }
         viewModelScope.launch {
             repository.pendingDetailsRecord.collect { pending ->
-                if (_activeDialogRecord.value == null && pending != null && pending.record.id != finalizingRecordId) {
+                if (_activeDialogRecord.value == null && pending != null 
+                    && pending.record.id != finalizingRecordId
+                    && !dismissedPendingRecordIds.contains(pending.record.id)) {
                     _activeDialogRecord.value = pending
                 }
             }
@@ -197,40 +200,32 @@ class MainViewModel(
         repository.logEvent("MANUAL_CANCEL")
     }
 
-    fun finalizeCommute(record: CommuteRecord, modes: List<CommuteMode>, context: Context) {
-        finalizingRecordId = record.id
+    fun saveCommuteDetails(record: CommuteRecord, modes: List<CommuteMode>, context: Context) {
         _activeDialogRecord.value = null
-        viewModelScope.launch {
-            val totalDuration = modes.sumOf { it.durationMinutes }
-            val updatedRecord = record.copy(
-                status = CommuteStatus.COMPLETED,
-                durationMinutes = if (totalDuration > 0) totalDuration else record.durationMinutes,
-                arrivalTimestamp = if (totalDuration > 0) record.startTimestamp + (totalDuration.toLong() * 60 * 1000) else record.arrivalTimestamp
-            )
-            repository.updateRecord(updatedRecord)
-            repository.deleteModesForCommute(record.id)
-            repository.insertModes(modes.map { it.copy(commuteId = record.id) })
+        
+        if (record.status == CommuteStatus.PENDING_DETAILS) {
+            finalizingRecordId = record.id
             
+            // Cancel notification immediately and synchronously
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.cancel(CommuteTrackerService.COMMUTE_ALERT_NOTIFICATION_ID)
-            repository.logEvent("COMMUTE_COMPLETED", "id=${record.id}")
             
-            kotlinx.coroutines.delay(1000)
-            finalizingRecordId = -1
-        }
-    }
-
-    fun updateCommute(record: CommuteRecord, modes: List<CommuteMode>) {
-        _activeDialogRecord.value = null
-        viewModelScope.launch {
-            val totalDuration = modes.sumOf { it.durationMinutes }
-            val updatedRecord = record.copy(
-                durationMinutes = if (totalDuration > 0) totalDuration else record.durationMinutes,
-                arrivalTimestamp = if (totalDuration > 0) record.startTimestamp + (totalDuration.toLong() * 60 * 1000) else record.arrivalTimestamp
-            )
-            repository.updateRecord(updatedRecord)
-            repository.deleteModesForCommute(record.id)
-            repository.insertModes(modes.map { it.copy(commuteId = record.id) })
+            viewModelScope.launch {
+                val updatedRecord = record.copy(status = CommuteStatus.COMPLETED)
+                repository.updateRecord(updatedRecord)
+                repository.deleteModesForCommute(record.id)
+                repository.insertModes(modes.map { it.copy(commuteId = record.id) })
+                repository.logEvent("COMMUTE_COMPLETED", "id=${record.id}")
+                
+                kotlinx.coroutines.delay(1000)
+                finalizingRecordId = -1
+            }
+        } else {
+            viewModelScope.launch {
+                repository.updateRecord(record)
+                repository.deleteModesForCommute(record.id)
+                repository.insertModes(modes.map { it.copy(commuteId = record.id) })
+            }
         }
     }
 
@@ -241,14 +236,12 @@ class MainViewModel(
         endTime: Long,
         modes: List<CommuteMode>
     ) = viewModelScope.launch {
-        val totalDuration = modes.sumOf { it.durationMinutes }
-        // Use the explicitly provided endTime if modes are empty or if it spans more than the sum of modes (gaps)
-        val calculatedEndTime = if (totalDuration > 0 && endTime <= startTime) {
-            startTime + (totalDuration.toLong() * 60 * 1000)
+        val calculatedEndTime = if (endTime <= startTime) {
+            startTime + 60000 // Ensure at least 1 minute if invalid end time is given
         } else {
             endTime
         }
-        val durationMinutes = if (totalDuration > 0) totalDuration else ((calculatedEndTime - startTime) / (1000 * 60)).toInt()
+        val durationMinutes = ((calculatedEndTime - startTime) / (1000 * 60)).toInt()
         val record = CommuteRecord(
             date = date,
             direction = direction,
@@ -264,6 +257,10 @@ class MainViewModel(
     }
 
     fun deleteCommute(record: CommuteRecord) = viewModelScope.launch {
+        // Specifically check if the deleted record was the one currently in the dialog
+        if (_activeDialogRecord.value?.record?.id == record.id) {
+            _activeDialogRecord.value = null
+        }
         repository.deleteRecord(record)
     }
 
@@ -384,6 +381,9 @@ class MainViewModel(
     fun clearHistory() = viewModelScope.launch { repository.clearHistory() }
     fun clearLogs() = viewModelScope.launch { repository.clearLogs() }
     fun showEditDialog(record: CommuteWithModes) { _activeDialogRecord.value = record }
-    fun dismissDialog() { _activeDialogRecord.value = null }
+    fun dismissDialog() { 
+        _activeDialogRecord.value?.record?.id?.let { dismissedPendingRecordIds.add(it) }
+        _activeDialogRecord.value = null 
+    }
     fun setFirstRunComplete() = viewModelScope.launch { preferenceManager.setFirstRunComplete() }
 }

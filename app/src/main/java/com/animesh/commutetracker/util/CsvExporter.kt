@@ -15,7 +15,9 @@ object CsvExporter {
         val csvBody = records.joinToString("\n") { commute ->
             val record = commute.record
             val modes = commute.modes
-            val transportStr = modes.joinToString("; ") { "${it.transportMode.name}(${it.durationMinutes}m)" }
+            val transportStr = modes.joinToString("; ") { mode ->
+                mode.durationMinutes?.let { "${mode.transportMode.name}(${it}m)" } ?: mode.transportMode.name
+            }
             val totalCost = modes.sumOf { it.cost }
             "${record.date},${record.direction},${dateFormat.format(Date(record.startTimestamp))},${dateFormat.format(Date(record.arrivalTimestamp))},${record.durationMinutes},\"$transportStr\",$totalCost,${record.detectionMethod}"
         }

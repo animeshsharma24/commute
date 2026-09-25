@@ -19,8 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.animesh.commutetracker.data.repository.TrackingMode
 import com.animesh.commutetracker.ui.viewmodel.MainViewModel
@@ -59,27 +60,39 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+            
             item { SettingHeader("TRACKING") }
             item {
-                Text("Tracking Mode (Auto-Selected at Runtime)", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "Tracking Mode (Auto-Selected at Runtime)", 
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TrackingMode.entries.forEach { mode ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(
                                 selected = trackingMode == mode, 
                                 onClick = null,
-                                enabled = trackingMode == mode
+                                enabled = trackingMode == mode,
+                                colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                             )
-                            Text(mode.name, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                mode.name, 
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (trackingMode == mode) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             item { SettingHeader("WI-FI LOCATIONS") }
-            item { Text("Home SSIDs", style = MaterialTheme.typography.labelSmall) }
+            item { Text("Home SSIDs", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(homeSsids.toList()) { ssid ->
                 SsidItem(ssid) { viewModel.removeHomeSsid(ssid) }
             }
@@ -89,12 +102,13 @@ fun SettingsScreen(
             item {
                 TextButton(onClick = { viewModel.addHomeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
                     Icon(Icons.Default.Add, null)
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Add Current: $lastDetectedSsid")
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
             
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-            item { Text("Office SSIDs", style = MaterialTheme.typography.labelSmall) }
+            item { Text("Office SSIDs", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(officeSsids.toList()) { ssid ->
                 SsidItem(ssid) { viewModel.removeOfficeSsid(ssid) }
             }
@@ -104,8 +118,10 @@ fun SettingsScreen(
             item {
                 TextButton(onClick = { viewModel.addOfficeSsid(lastDetectedSsid) }, enabled = lastDetectedSsid != "None") {
                     Icon(Icons.Default.Add, null)
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Add Current: $lastDetectedSsid")
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             item { SettingHeader("GEOFENCE LOCATIONS") }
@@ -120,35 +136,53 @@ fun SettingsScreen(
                 }
             }
             item {
-                Text("Geofence Radius: ${geofenceRadius}m", style = MaterialTheme.typography.labelSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Geofence Radius: ${geofenceRadius}m", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(
                     value = geofenceRadius.toFloat(),
                     onValueChange = { viewModel.setGeofenceRadius(it.toInt()) },
                     valueRange = 100f..500f,
                     steps = 4
                 )
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             item { SettingHeader("DATA") }
             item {
-                Button(onClick = { CsvExporter.exportRecords(context, allRecords) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Export History as CSV")
+                Button(
+                    onClick = { CsvExporter.exportRecords(context, allRecords) }, 
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Export History as CSV", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 }
             }
             item {
                 Button(
                     onClick = onClearHistory,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Clear History")
+                    Text("Clear History", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 }
             }
 
             item { SettingHeader("DIAGNOSTICS") }
             item {
-                Button(onClick = onNavigateToDebug, modifier = Modifier.fillMaxWidth()) {
-                    Text("Show Tracker Debug State")
+                Button(
+                    onClick = onNavigateToDebug, 
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Text("Show Tracker Debug State", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 }
             }
             item {
@@ -159,10 +193,14 @@ fun SettingsScreen(
                         }
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant, 
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("App Permissions & Battery Settings")
+                    Text("App Permissions & Battery Settings", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 }
             }
         }
@@ -171,28 +209,53 @@ fun SettingsScreen(
 
 @Composable
 fun SettingHeader(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(
+        text = text, 
+        style = MaterialTheme.typography.titleSmall, 
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, 
+        color = MaterialTheme.colorScheme.primary, 
+        modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+        letterSpacing = 1.sp
+    )
 }
 
 @Composable
 fun SsidInputRow(value: String, onValueChange: (String) -> Unit, onAdd: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text("Add SSID") }, modifier = Modifier.weight(1f), textStyle = MaterialTheme.typography.bodySmall)
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+        OutlinedTextField(
+            value = value, 
+            onValueChange = onValueChange, 
+            label = { Text("Add SSID") }, 
+            modifier = Modifier.weight(1f), 
+            textStyle = MaterialTheme.typography.bodySmall,
+            singleLine = true
+        )
         IconButton(onClick = onAdd) { Icon(Icons.Default.Add, "Add") }
     }
 }
 
 @Composable
 fun LocationPickerRow(label: String, location: Pair<Double, Double>?, onPick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, fontWeight = FontWeight.Bold)
-            Text(location?.let { "%.4f, %.4f".format(it.first, it.second) } ?: "Not set", style = MaterialTheme.typography.bodySmall)
-        }
-        Button(onClick = onPick) {
-            Icon(Icons.Default.MyLocation, null)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Set Current")
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = location?.let { "%.4f, %.4f".format(it.first, it.second) } ?: "Not set", 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FilledTonalButton(onClick = onPick) {
+                Icon(Icons.Default.MyLocation, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Set Current", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -200,9 +263,9 @@ fun LocationPickerRow(label: String, location: Pair<Double, Double>?, onPick: ()
 @Composable
 fun SsidItem(ssid: String, onRemove: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(ssid, modifier = Modifier.weight(1f))
+        Text(ssid, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         IconButton(onClick = onRemove) {
-            Icon(Icons.Default.Delete, "Remove", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.Delete, "Remove", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
         }
     }
 }

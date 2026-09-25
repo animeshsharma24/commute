@@ -148,7 +148,7 @@ fun ManualCommuteScreen(
                         onNavigateBack()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = modes.isNotEmpty() && endTime.after(startTime)
+                    enabled = modes.isNotEmpty()
                 ) {
                     Text("Save Commute")
                 }
@@ -161,8 +161,10 @@ fun ManualCommuteScreen(
         TransportDialog(
             recentCosts = recentCosts,
             totalDuration = totalTracked,
+            initialModes = modes, // Pass existing modes to validate correctly
+            onModeSelected = { viewModel.loadRecentCosts(it) },
             onConfirm = { addedModes ->
-                modes = modes + addedModes
+                modes = addedModes // TransportDialog now returns ALL modes, not just added ones
                 showAddModeDialog = false
             },
             onDismiss = { showAddModeDialog = false }

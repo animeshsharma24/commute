@@ -11,7 +11,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.animesh.commutetracker.data.model.*
@@ -103,19 +107,32 @@ fun MainScreen(
             }
             
             item {
-                Text("Today's Commutes", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Today's Commutes", 
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
 
             if (todayRecords.isEmpty()) {
                 item {
-                    Text("No commutes recorded today.", modifier = Modifier.padding(vertical = 16.dp))
+                    EmptyStateView(
+                        icon = Icons.Default.DirectionsTransit,
+                        message = "No commutes recorded today"
+                    )
                 }
             }
 
             items(todayRecords) { record ->
-                CommuteItem(record) {
-                    viewModel.showEditDialog(record)
-                }
+                CommuteItem(
+                    commuteWithModes = record,
+                    onClick = {
+                        viewModel.showEditDialog(record)
+                    },
+                    onDelete = null
+                )
             }
         }
     }
@@ -144,13 +161,10 @@ fun MainScreen(
         TransportDialog(
             recentCosts = recentCosts,
             totalDuration = commuteWithModes.record.durationMinutes,
+            initialModes = commuteWithModes.modes,
             onModeSelected = { viewModel.loadRecentCosts(it) },
             onConfirm = { modes ->
-                if (commuteWithModes.record.status == CommuteStatus.PENDING_DETAILS) {
-                    viewModel.finalizeCommute(commuteWithModes.record, modes, context)
-                } else {
-                    viewModel.updateCommute(commuteWithModes.record, modes)
-                }
+                viewModel.saveCommuteDetails(commuteWithModes.record, modes, context)
             },
             onDismiss = { viewModel.dismissDialog() }
         )
@@ -167,31 +181,126 @@ fun StatusCard(
     onToggle: (Boolean) -> Unit,
     onEndCommute: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Tracking Mode: ${mode.name}", fontWeight = FontWeight.Bold)
-                    Text("Status: $state", style = MaterialTheme.typography.bodySmall)
-                }
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Tracking",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Switch(checked = enabled, onCheckedChange = onToggle)
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Tracking Mode indicator
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Text(
+                        text = mode.name,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Status indicator
+                val isMonitoring = enabled && state == "IDLE"
+                val isActive = state.contains("PENDING")
+                val statusColor = when {
+                    isActive -> MaterialTheme.colorScheme.secondary // Green
+                    isMonitoring -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                val statusText = when {
+                    !enabled -> "Disabled"
+                    state == "IDLE" -> "Monitoring"
+                    state == "HOME_TO_OFFICE_PENDING" -> "In Transit (To Office)"
+                    state == "OFFICE_TO_HOME_PENDING" -> "In Transit (To Home)"
+                    else -> state
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(statusColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             if (state.contains("PENDING")) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onEndCommute,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Stop, null)
+                    Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("END COMMUTE")
+                    Text("End Ongoing Commute", fontWeight = FontWeight.SemiBold)
                 }
             }
+
             if (mode == TrackingMode.WIFI && enabled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Home: ${homeSsids.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-                Text("Office: ${officeSsids.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row {
+                        Text(
+                            text = "Home",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(60.dp)
+                        )
+                        Text(
+                            text = if(homeSsids.isEmpty()) "Not configured" else homeSsids.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Row {
+                        Text(
+                            text = "Office",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(60.dp)
+                        )
+                        Text(
+                            text = if(officeSsids.isEmpty()) "Not configured" else officeSsids.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
     }
@@ -207,30 +316,77 @@ fun ManualControlCard(
 ) {
     val timeStr = if (isActive) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(startTime)) else ""
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (isActive) {
                 Text("MANUAL COMMUTE ACTIVE", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text("Started at: $timeStr", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStop, modifier = Modifier.weight(1f)) { Text("STOP") }
-                    OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("CANCEL") }
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = onStop, 
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Finish", fontWeight = FontWeight.SemiBold) }
+                    
+                    OutlinedButton(
+                        onClick = onCancel, 
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Cancel", fontWeight = FontWeight.SemiBold) }
                 }
             } else {
-                Text("Ready to start?", style = MaterialTheme.typography.bodyMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
+                Text("Start a manual commute", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onStart, 
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
                     Icon(Icons.Default.PlayArrow, null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("START COMMUTE")
+                    Text("Start Commute", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
+    }
+}
+
+@Composable
+fun EmptyStateView(icon: ImageVector, message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(72.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxSize(),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

@@ -55,7 +55,7 @@ data class CommuteMode(
     val modeId: Long = 0,
     val commuteId: Long,
     val transportMode: TransportMode,
-    val durationMinutes: Int,
+    val durationMinutes: Int?,
     val cost: Int
 )
 

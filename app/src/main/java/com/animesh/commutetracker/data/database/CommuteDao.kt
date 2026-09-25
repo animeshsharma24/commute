@@ -44,7 +44,7 @@ interface CommuteDao {
     @Query("DELETE FROM commute_records")
     suspend fun clearHistory()
 
-    @Query("SELECT DISTINCT cost FROM commute_modes WHERE transportMode = :mode AND cost > 0 ORDER BY modeId DESC LIMIT 4")
+    @Query("SELECT cost FROM commute_modes WHERE transportMode = :mode AND cost > 0 GROUP BY cost ORDER BY MAX(modeId) DESC LIMIT 4")
     suspend fun getRecentCostsForTransport(mode: TransportMode): List<Int>
 
     @Transaction

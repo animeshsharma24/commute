@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.animesh.commutetracker.data.model.CommuteRecord
+import androidx.compose.material.icons.filled.History
+import com.animesh.commutetracker.ui.screens.EmptyStateView
 import com.animesh.commutetracker.data.model.CommuteStatus
 import com.animesh.commutetracker.data.model.CommuteWithModes
 import com.animesh.commutetracker.ui.components.CommuteItem
@@ -33,36 +35,63 @@ fun HistoryScreen(
 
     var recordToDelete by remember { mutableStateOf<CommuteRecord?>(null) }
 
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Commute History") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                },
+                actions = {
+                    if (allRecords.isNotEmpty()) {
+                        TextButton(onClick = { showClearHistoryDialog = true }) {
+                            Text("Clear", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             )
         }
     ) { padding ->
         val groupedRecords = allRecords.groupBy { it.record.date }
 
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-            groupedRecords.forEach { (date, records) ->
-                item {
-                    Text(date, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                }
-                items(records) { record ->
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        CommuteItem(record) {
-                            viewModel.showEditDialog(record)
-                        }
-                        IconButton(
-                            onClick = { recordToDelete = record.record },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
-                        }
+        if (allRecords.isEmpty()) {
+            Box(modifier = Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                EmptyStateView(
+                    icon = Icons.Default.History,
+                    message = "No commute history yet"
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
+            ) {
+                groupedRecords.forEach { (date, records) ->
+                    item {
+                        Text(
+                            text = date, 
+                            style = MaterialTheme.typography.titleMedium, 
+                            fontWeight = FontWeight.SemiBold, 
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    items(records) { record ->
+                        CommuteItem(
+                            commuteWithModes = record, 
+                            onClick = {
+                                if (recordToDelete == null) {
+                                    viewModel.showEditDialog(record)
+                                }
+                            },
+                            onDelete = {
+                                recordToDelete = record.record
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
             }
         }
@@ -84,13 +113,33 @@ fun HistoryScreen(
         )
     }
 
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            title = { Text("Clear All History?") },
+            text = { Text("Are you sure you want to permanently delete all your commute records? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { 
+                    viewModel.clearHistory()
+                    showClearHistoryDialog = false
+                }) {
+                    Text("Clear All", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     activeDialogRecord?.let { commuteWithModes ->
         TransportDialog(
             recentCosts = recentCosts,
             totalDuration = commuteWithModes.record.durationMinutes,
+            initialModes = commuteWithModes.modes,
             onModeSelected = { viewModel.loadRecentCosts(it) },
             onConfirm = { modes ->
-                viewModel.updateCommute(commuteWithModes.record, modes)
+                viewModel.saveCommuteDetails(commuteWithModes.record, modes, context)
             },
             onDismiss = { viewModel.dismissDialog() }
         )
